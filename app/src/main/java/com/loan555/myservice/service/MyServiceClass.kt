@@ -28,6 +28,9 @@ import com.loan555.myservice.model.AudioList
 import com.loan555.myservice.model.AudioTest
 import kotlinx.android.synthetic.main.activity_main.*
 import kotlinx.android.synthetic.main.fragment_songs_list.*
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.launch
 import java.lang.Exception
 import kotlin.random.Random
 
@@ -52,13 +55,15 @@ class MyServiceClass : Service() {
     // Random number generator
     private val mGenerator = Random
 
+    var lastClick = 0
+
     /** method for clients  */
     val randomNumber: Int
         get() = mGenerator.nextInt(100)
 
     lateinit var songPlaying: Audio
 
-    private lateinit var myItemView: View
+    var myItemView: View? = null
     var myItemViewFragment: View? = null
 
     /**
@@ -147,7 +152,7 @@ class MyServiceClass : Service() {
         else R.drawable.ic_baseline_play_arrow_24
     }
 
-    fun handActionMusic(actionMusic: Int?) {// cap nhat trang thai cho cac nut
+    private fun handActionMusic(actionMusic: Int?) {// cap nhat trang thai cho cac nut
         Log.e(tagTest, "handActionMusic $actionMusic")
         when (actionMusic) {
             0 -> {
@@ -159,8 +164,8 @@ class MyServiceClass : Service() {
                         Log.d(tagTest, "pause")
                         isPlaying = false
                         mPlayer.pause()
-                        myItemView.findViewById<View>(R.id.play_pause)
-                            .setBackgroundResource(R.drawable.ic_baseline_play_arrow_24)
+                        myItemView?.findViewById<View>(R.id.play_pause)
+                            ?.setBackgroundResource(R.drawable.ic_baseline_play_arrow_24)
                         if (myItemViewFragment != null) {
                             myItemViewFragment?.setBackgroundResource(R.drawable.ic_baseline_play_arrow_24)
                         }
@@ -172,8 +177,8 @@ class MyServiceClass : Service() {
                         Log.d(tagTest, "play")
                         isPlaying = true
                         mPlayer.start()
-                        myItemView.findViewById<View>(R.id.play_pause)
-                            .setBackgroundResource(R.drawable.ic_baseline_pause_24)
+                        myItemView?.findViewById<View>(R.id.play_pause)
+                            ?.setBackgroundResource(R.drawable.ic_baseline_pause_24)
                         if (myItemViewFragment != null) {
                             myItemViewFragment?.setBackgroundResource(R.drawable.ic_baseline_pause_24)
                         }
@@ -184,11 +189,11 @@ class MyServiceClass : Service() {
             }
             2 -> {
                 Log.d(tagTest, "next")
-                nextClick(songPlaying, statePlay, myItemView)
+                nextClick(songPlaying, statePlay)
             }
             -2 -> {
                 Log.d(tagTest, "back")
-                skipBackClick(songPlaying, statePlay, myItemView)
+                skipBackClick(songPlaying, statePlay)
             }
             3 -> {
                 Log.d(tagTest, "stop")
@@ -197,12 +202,24 @@ class MyServiceClass : Service() {
         }
     }
 
+    fun handBtnPlayImg() {
+        if (isPlaying) {
+            myItemViewFragment?.setBackgroundResource(R.drawable.ic_baseline_pause_24)
+            myItemView?.findViewById<View>(R.id.play_pause)
+                ?.setBackgroundResource(R.drawable.ic_baseline_pause_24)
+        } else {
+            myItemViewFragment?.setBackgroundResource(R.drawable.ic_baseline_play_arrow_24)
+            myItemView?.findViewById<View>(R.id.play_pause)
+                ?.setBackgroundResource(R.drawable.ic_baseline_play_arrow_24)
+        }
+    }
+
     private fun getPendingIntent(context: Context, action: Int, bundle: Bundle): PendingIntent? {
         Log.e(tagTest, "getPendingIntent")
         val intent = Intent(this, MyBroadcastReceiver::class.java)
         intent.putExtra("action_music", action)
-        intent.putExtra("bundle_song", bundle)
-        return PendingIntent.getBroadcast(
+        intent.putExtra("bundle_song", bundle)// cai nay chi push len de cho du lieu khoi null
+        return PendingIntent.getBroadcast(// lay intent cua receiver
             context.applicationContext,
             action,
             intent,
@@ -248,16 +265,13 @@ class MyServiceClass : Service() {
     }
 
     fun playAudio(
-        song: Audio,
-        itemPlaying: View?
+        song: Audio
     ) {
-        if (currentFragment == "home")
-            initViewPlay(song, itemPlaying)
+        isPlaying = true
         clickStartService(song)
         songPlaying = song
-        if (itemPlaying != null) {
-            myItemView = itemPlaying
-        }
+        if (currentFragment == "home")
+            initViewPlay(song)
     }
 
     private fun clickStartService(audio: Audio) {
@@ -278,26 +292,25 @@ class MyServiceClass : Service() {
     }
 
     fun initViewPlay(
-        item: Audio,
-        itemPlaying: View?
+        item: Audio
     ) {
-        itemPlaying?.visibility = View.VISIBLE
-        val imgSong = itemPlaying?.findViewById<ImageView>(R.id.img_playing)
-        val nameSong = itemPlaying?.findViewById<TextView>(R.id.nameSong_playing)
-        val singerSong = itemPlaying?.findViewById<TextView>(R.id.singer_playing)
-        val pauseBtn = itemPlaying?.findViewById<ImageButton>(R.id.play_pause)
+        myItemView?.visibility = View.VISIBLE
+        val imgSong = myItemView?.findViewById<ImageView>(R.id.img_playing)
+        val nameSong = myItemView?.findViewById<TextView>(R.id.nameSong_playing)
+        val singerSong = myItemView?.findViewById<TextView>(R.id.singer_playing)
+        val pauseBtn = myItemView?.findViewById<ImageButton>(R.id.play_pause)
         imgSong?.setImageBitmap(item.bitmap)
 //        lastClick++
 //        GlobalScope.launch(Dispatchers.IO) {
 //            val threadPlaying = lastClick
 //            var rotat = 0f
 //            while (threadPlaying == lastClick) {
-//                Thread.sleep(100)
+//                Thread.sleep(50)
 //                // Call a method from the LocalService.
 //                // However, if this call were something that might hang, then this request should
 //                // occur in a separate thread to avoid slowing down the activity performance.
 //                if (isPlaying) {
-//                    rotat += 1f * 360 / 100
+//                    rotat += 1f * 360 / 500
 //                    rotat %= 360
 //                    imgSong?.rotation = rotat
 //                }
@@ -305,42 +318,31 @@ class MyServiceClass : Service() {
 //        }
         nameSong?.text = item.title
         singerSong?.text = item.artists
-        pauseBtn?.setBackgroundResource(R.drawable.ic_baseline_pause_24)
+        if (isPlaying)
+            pauseBtn?.setBackgroundResource(R.drawable.ic_baseline_pause_24)
+        else
+            pauseBtn?.setBackgroundResource(R.drawable.ic_baseline_play_arrow_24)
     }
 
-    fun handMusic(view: View?) {
-        when (isPlaying) {
-            false -> {// dang dung thi chay
-                resumeMusic()
-                view?.setBackgroundResource(R.drawable.ic_baseline_pause_24)
-            }
-            true -> {//dang chay thi dung
-                pauseMusic()
-                view?.setBackgroundResource(R.drawable.ic_baseline_play_arrow_24)
-            }
-        }
-    }
-
-    private fun pauseMusic() {
-        try {
-            if (mPlayer != null) {
-                mPlayer.pause()
-                isPlaying = false
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, e.message.toString())
-        }
-    }
-
-    private fun resumeMusic() {
-        try {
-            if (mPlayer != null) {
-                mPlayer.start()
-                isPlaying = true
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Can't start media! ${e.message}")
-        }
+    fun handMusic() {
+        val bundleReceiver = Bundle()
+        val audio = songPlaying
+        val audioTest = AudioTest(
+            audio.id,
+            audio.name,
+            audio.artists,
+            audio.duration,
+            audio.size,
+            audio.title,
+            audio.albums
+        )
+        bundleReceiver.putSerializable("song", audioTest)
+        val intentReceiver = Intent(this, MyBroadcastReceiver::class.java)
+        intentReceiver.putExtra("action_music", ACTION_PAUSE)
+        intentReceiver.putExtra("bundle_song", bundleReceiver)
+        val bundle = intentReceiver.getBundleExtra("bundle_song")
+        Log.d(tagTest, "sddfsd lay tu rec: $bundle ")
+        sendBroadcast(intentReceiver)
     }
 
     private fun convertToAudio(audioTest: AudioTest): Audio {
@@ -414,15 +416,12 @@ class MyServiceClass : Service() {
                 var nextSongPlay: Audio
                 val positionNow = audioList.getPositionByID(audioPlaying.id)
                 val next = nextSong(positionNow, statePlay)
+
                 if (next != -1) {
                     nextSongPlay = audioList.getItem(next)
-                    playAudio(nextSongPlay, itemPlaying)
+                    playAudio(nextSongPlay)
                 } else
-                    if (currentFragment == "home")
-                        handMusic(itemPlaying?.findViewById(R.id.play_pause))
-                    else if (currentFragment == "play") {
-                        handMusic(itemPlaying?.findViewById(R.id.play_pause))
-                    }
+                    handMusic()
             } catch (e: Exception) {
                 Log.e(TAG, "play music error: ${e.message}")
             }
@@ -430,8 +429,7 @@ class MyServiceClass : Service() {
 
     fun nextClick(
         audioPlaying: Audio,
-        statePlay: Int,
-        itemPlaying: View?
+        statePlay: Int
     ) {
         if (audioList.getSize() > 0)
             try {
@@ -442,26 +440,15 @@ class MyServiceClass : Service() {
                 if (next != -1) {
                     nextSongPlay = audioList.getItem(next)
                 }
-                playAudio(nextSongPlay, itemPlaying)
+                playAudio(nextSongPlay)
             } catch (e: Exception) {
                 Log.e(TAG, "play music error: ${e.message}")
             }
     }
 
-    fun setAlarm() {//time la so phut
-        var result = false
-        var count = 0
-        while (count < alarmTime) {
-            Thread.sleep(5000)
-            count += 5
-        }
-        mPlayer?.pause()
-    }
-
     fun skipBackClick(
         audioPlaying: Audio,
-        statePlay: Int,
-        viewPlaying: View?
+        statePlay: Int
     ) {
         if (audioList.getSize() > 0)
             try {
@@ -475,7 +462,7 @@ class MyServiceClass : Service() {
                 if (back != -1) {
                     backSongPlay = audioList.getItem(back)
                 }
-                playAudio(backSongPlay, viewPlaying)
+                playAudio(backSongPlay)
             } catch (e: Exception) {
                 Log.e(TAG, "play music error: ${e.message}")
             }

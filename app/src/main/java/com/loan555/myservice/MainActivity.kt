@@ -1,5 +1,6 @@
 package com.loan555.myservice
 
+import android.app.PendingIntent
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
@@ -13,12 +14,15 @@ import android.view.Menu
 import android.view.View
 import android.widget.Toast
 import androidx.fragment.app.commit
+import com.loan555.myservice.broadcast.MyBroadcastReceiver
 import com.loan555.myservice.fragment.ListSongFragment
 import com.loan555.myservice.fragment.PlayFragment
 import com.loan555.myservice.model.Audio
 import com.loan555.myservice.model.AudioList
+import com.loan555.myservice.model.AudioTest
 import com.loan555.myservice.permission.MyPermission
 import com.loan555.myservice.permission.STORAGE_REQUEST_CODE
+import com.loan555.myservice.service.ACTION_PAUSE
 import com.loan555.myservice.service.MyServiceClass
 import com.loan555.myservice.service.tagTest
 import kotlinx.android.synthetic.main.activity_main.*
@@ -89,7 +93,7 @@ class MainActivity : AppCompatActivity(),
                 // Call a method from the LocalService.
                 // However, if this call were something that might hang, then this request should
                 // occur in a separate thread to avoid slowing down the activity performance.
-                mService.handMusic(it)
+                mService.handMusic()
             } else {
                 Toast.makeText(this, "service is not ready", Toast.LENGTH_SHORT).show()
             }
@@ -101,8 +105,7 @@ class MainActivity : AppCompatActivity(),
                     if (mService.songPlaying != null) {
                         mService.nextClick(
                             mService.songPlaying,
-                            mService.statePlay,
-                            music_playing
+                            mService.statePlay
                         )
                     }
                 } catch (e: Exception) {
@@ -118,8 +121,7 @@ class MainActivity : AppCompatActivity(),
                     if (mService.songPlaying != null) {
                         mService.skipBackClick(
                             mService.songPlaying,
-                            mService.statePlay,
-                            music_playing
+                            mService.statePlay
                         )
                         Log.e(tagTest, "back: ")
                     }
@@ -166,7 +168,7 @@ class MainActivity : AppCompatActivity(),
             "play" -> {
                 supportFragmentManager.popBackStack()
                 music_playing.visibility = View.VISIBLE
-                mService.initViewPlay(mService.songPlaying, music_playing)
+                mService.initViewPlay(mService.songPlaying)
                 currentFragment = "home"
             }
         }
@@ -174,6 +176,7 @@ class MainActivity : AppCompatActivity(),
 
     override fun onDestroy() {
         super.onDestroy()
+        mService.myItemView = null
         unbindService(conn)
     }
 
@@ -206,6 +209,7 @@ class MainActivity : AppCompatActivity(),
 
     private fun loadData(listData: AudioList) {
         if (permissions.checkStoragePermission()) {
+            Toast.makeText(this, "Data is loading...", Toast.LENGTH_SHORT).show()
             GlobalScope.launch(Dispatchers.Main) {
                 val result = async(Dispatchers.IO) {
                     try {
@@ -230,13 +234,9 @@ class MainActivity : AppCompatActivity(),
     }
 
     override fun click(item: Audio) {
-        playAudio(item)
-    }
-
-    private fun playAudio(item: Audio) {
+        mService.myItemView = music_playing
         mService.playAudio(
-            item,
-            music_playing
+            item
         )
     }
 }

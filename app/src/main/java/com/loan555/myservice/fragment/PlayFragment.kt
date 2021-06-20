@@ -60,11 +60,9 @@ class PlayFragment(private val mService: MyServiceClass) : Fragment() {
             }
 
         })
-
         play.setOnClickListener {
             try {
-                currentFragment = "play"
-                mService.handMusic(it)
+                mService.handMusic()
             } catch (e: Exception) {
                 Toast.makeText(this.requireContext(), "service is not ready", Toast.LENGTH_SHORT)
                     .show()
@@ -77,9 +75,9 @@ class PlayFragment(private val mService: MyServiceClass) : Fragment() {
                     if (mService.songPlaying != null) {
                         mService.nextClick(
                             mService.songPlaying,
-                            mService.statePlay,
-                            music_playing
+                            mService.statePlay
                         )
+                        mService.handBtnPlayImg()
                     }
                 } catch (e: Exception) {
                     Log.e(tagTest, "skip next error: ${e.message}")
@@ -96,10 +94,10 @@ class PlayFragment(private val mService: MyServiceClass) : Fragment() {
                     if (mService.songPlaying != null) {
                         mService.skipBackClick(
                             mService.songPlaying,
-                            mService.statePlay,
-                            music_playing
+                            mService.statePlay
                         )
                         Log.e(tagTest, "back: ")
+                        mService.handBtnPlayImg()
                     }
                 } catch (e: Exception) {
                     Log.e(tagTest, "skip next error: ${e.message}")
