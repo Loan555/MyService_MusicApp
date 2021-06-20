@@ -22,6 +22,7 @@ import com.loan555.myservice.permission.STORAGE_REQUEST_CODE
 import com.loan555.myservice.service.MyServiceClass
 import com.loan555.myservice.service.tagTest
 import kotlinx.android.synthetic.main.activity_main.*
+import kotlinx.android.synthetic.main.fragment_play.*
 import kotlinx.android.synthetic.main.fragment_songs_list.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
@@ -138,6 +139,7 @@ class MainActivity : AppCompatActivity(),
                 addToBackStack("play")
             }
             music_playing.visibility = View.GONE
+            mService.myItemViewFragment = play
         }
     }
 
@@ -172,8 +174,6 @@ class MainActivity : AppCompatActivity(),
 
     override fun onDestroy() {
         super.onDestroy()
-        val intent = Intent(this, MyServiceClass::class.java)
-        stopService(intent)
         unbindService(conn)
     }
 

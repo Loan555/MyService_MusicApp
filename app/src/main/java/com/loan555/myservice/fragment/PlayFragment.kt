@@ -40,6 +40,8 @@ class PlayFragment(private val mService: MyServiceClass) : Fragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
+        mService.myItemViewFragment = play
+
         currentFragment = "play"
         handShuffle(loop)
 
@@ -118,6 +120,11 @@ class PlayFragment(private val mService: MyServiceClass) : Fragment() {
                 Toast.LENGTH_SHORT
             ).show()
         }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        mService.myItemViewFragment = null
     }
 
     private fun handAlarm(view: View?) {

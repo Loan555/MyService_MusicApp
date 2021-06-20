@@ -1,12 +1,8 @@
 package com.loan555.myservice.service
 
-import android.app.Notification
 import android.app.PendingIntent
 import android.app.Service
-import android.content.BroadcastReceiver
-import android.content.ContentUris
-import android.content.Intent
-import android.graphics.Bitmap
+import android.content.*
 import android.graphics.BitmapFactory
 import android.media.MediaPlayer
 import android.os.Binder
@@ -21,6 +17,7 @@ import android.view.View
 import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.TextView
+import android.widget.Toast
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import com.loan555.myservice.*
@@ -31,16 +28,17 @@ import com.loan555.myservice.model.AudioList
 import com.loan555.myservice.model.AudioTest
 import kotlinx.android.synthetic.main.activity_main.*
 import kotlinx.android.synthetic.main.fragment_songs_list.*
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.GlobalScope
-import kotlinx.coroutines.launch
 import java.lang.Exception
 import kotlin.random.Random
 
 const val ONGOING_NOTIFICATION_ID = 1
+const val ACTION_PAUSE = 1
+private const val ACTION_STOP = 3
+private const val ACTION_NEXT = 2
+private const val ACTION_BACK = -2
 
 class MyServiceClass : Service() {
-    val br: BroadcastReceiver = MyBroadcastReceiver()
+
     var alarmTime = 0
     var statePlay: Int = 0
     var audioList = AudioList(this)
@@ -61,6 +59,7 @@ class MyServiceClass : Service() {
     lateinit var songPlaying: Audio
 
     private lateinit var myItemView: View
+    var myItemViewFragment: View? = null
 
     /**
      * Class used for the client Binder.  Because we know this service always
@@ -73,33 +72,57 @@ class MyServiceClass : Service() {
 
     override fun onCreate() {
         super.onCreate()
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N)
-            Log.d(TAG, "service on create")
+        Log.d(tagTest, "service on create")
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        Log.d(TAG, "service on start command")
+        Log.e(tagTest, "service on start command")
         try {
-            val bundle = intent?.extras// intent dang bij null
+            val action = intent?.getIntExtra("action_music_service", 0)
+            if (action != 0)
+                handActionMusic(action)// put intent o day se lam thay doi notification duoc
+
+            var bundle: Bundle? = null
+            bundle =
+                intent?.getBundleExtra("bundle_song")// intent dang bij nullval intent = Intent(this, MyServiceClass::class.java)
             if (bundle != null) {
                 val song = bundle.get("song") as AudioTest
                 val audio = convertToAudio(song)
                 val name = audio.title
                 val singer = audio.artists
                 val thumbnail = audio.bitmap
+                if (action == 0)
+                    startMusic(audio)
 
                 val pendingIntent =
-                    PendingIntent.getActivity(this, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT)
+                    PendingIntent.getActivity(this, 0, intent, flags)
                 val mediaSession = MediaSessionCompat(this, "tag")
+
                 val notification = NotificationCompat.Builder(this, CHANNEL_ID)
                     .setContentTitle(name)
                     .setContentText(singer)
                     .setSmallIcon(R.drawable.ic_baseline_music_note_24)
                     .setLargeIcon(thumbnail)
-                    .addAction(R.drawable.ic_baseline_skip_previous_24, "previous", null)//#0
-                    .addAction(R.drawable.ic_baseline_pause_24, "pause", null)//#1
-                    .addAction(R.drawable.ic_baseline_skip_next_24, "next", null)//#2
-                    .addAction(R.drawable.ic_baseline_close_24, "next", null)//#2
+                    .addAction(
+                        R.drawable.ic_baseline_skip_previous_24,
+                        "previous",
+                        getPendingIntent(this, ACTION_BACK, bundle)
+                    )//#0
+                    .addAction(
+                        getImgBtn(),
+                        "pause",
+                        getPendingIntent(this, ACTION_PAUSE, bundle)
+                    )//#1
+                    .addAction(
+                        R.drawable.ic_baseline_skip_next_24,
+                        "next",
+                        getPendingIntent(this, ACTION_NEXT, bundle)
+                    )//#2
+                    .addAction(
+                        R.drawable.ic_baseline_close_24,
+                        "next",
+                        getPendingIntent(this, ACTION_STOP, bundle)
+                    )//#2
                     .setStyle(
                         androidx.media.app.NotificationCompat.MediaStyle()
                             .setShowActionsInCompactView(0, 1, 2 /* #1: pause button \*/)
@@ -108,17 +131,83 @@ class MyServiceClass : Service() {
                     .setSound(null)
                     .setContentIntent(pendingIntent)
                     .build()
-//                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.KITKAT) {
-//                    if (isPlaying)
-//                    notification.actions[1].actionIntent = pendingIntent
-//                }
                 startForeground(ONGOING_NOTIFICATION_ID, notification)
-                startMusic(audio)
+            } else {
+                Log.d(tagTest, "bundel null ")
             }
         } catch (e: Exception) {
-            Log.e(TAG, "sent notification error: ${e.message}")
+            Log.e(tagTest, "sent notification error: ${e.message}")
         }
         return START_NOT_STICKY
+    }
+
+    private fun getImgBtn(): Int {
+        return if (isPlaying)
+            R.drawable.ic_baseline_pause_24
+        else R.drawable.ic_baseline_play_arrow_24
+    }
+
+    fun handActionMusic(actionMusic: Int?) {// cap nhat trang thai cho cac nut
+        Log.e(tagTest, "handActionMusic $actionMusic")
+        when (actionMusic) {
+            0 -> {
+                //khong co su kienj nao
+            }
+            1 -> {
+                if (isPlaying) {
+                    try {
+                        Log.d(tagTest, "pause")
+                        isPlaying = false
+                        mPlayer.pause()
+                        myItemView.findViewById<View>(R.id.play_pause)
+                            .setBackgroundResource(R.drawable.ic_baseline_play_arrow_24)
+                        if (myItemViewFragment != null) {
+                            myItemViewFragment?.setBackgroundResource(R.drawable.ic_baseline_play_arrow_24)
+                        }
+                    } catch (e: Exception) {
+                        Log.e(tagTest, "error pause: ${e.message}")
+                    }
+                } else {
+                    try {
+                        Log.d(tagTest, "play")
+                        isPlaying = true
+                        mPlayer.start()
+                        myItemView.findViewById<View>(R.id.play_pause)
+                            .setBackgroundResource(R.drawable.ic_baseline_pause_24)
+                        if (myItemViewFragment != null) {
+                            myItemViewFragment?.setBackgroundResource(R.drawable.ic_baseline_pause_24)
+                        }
+                    } catch (e: Exception) {
+                        Log.e(tagTest, "error play: ${e.message}")
+                    }
+                }
+            }
+            2 -> {
+                Log.d(tagTest, "next")
+                nextClick(songPlaying, statePlay, myItemView)
+            }
+            -2 -> {
+                Log.d(tagTest, "back")
+                skipBackClick(songPlaying, statePlay, myItemView)
+            }
+            3 -> {
+                Log.d(tagTest, "stop")
+                stopSelf()
+            }
+        }
+    }
+
+    private fun getPendingIntent(context: Context, action: Int, bundle: Bundle): PendingIntent? {
+        Log.e(tagTest, "getPendingIntent")
+        val intent = Intent(this, MyBroadcastReceiver::class.java)
+        intent.putExtra("action_music", action)
+        intent.putExtra("bundle_song", bundle)
+        return PendingIntent.getBroadcast(
+            context.applicationContext,
+            action,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT
+        )
     }
 
     override fun onBind(intent: Intent?): IBinder? {
@@ -184,8 +273,8 @@ class MyServiceClass : Service() {
             audio.albums
         )
         bundle.putSerializable("song", audioTest)
-        intent.putExtras(bundle)
-        ContextCompat.startForegroundService(this, intent)
+        intent.putExtra("bundle_song", bundle)
+        startService(intent)
     }
 
     fun initViewPlay(
@@ -299,7 +388,7 @@ class MyServiceClass : Service() {
                 else positionNow + 1
             }
             1 -> {
-                nexPosition = if (positionNow == audioList.getSize() -1 ) {
+                nexPosition = if (positionNow == audioList.getSize() - 1) {
                     0
                 } else {
                     positionNow + 1
@@ -331,7 +420,7 @@ class MyServiceClass : Service() {
                 } else
                     if (currentFragment == "home")
                         handMusic(itemPlaying?.findViewById(R.id.play_pause))
-                    else if (currentFragment == "play"){
+                    else if (currentFragment == "play") {
                         handMusic(itemPlaying?.findViewById(R.id.play_pause))
                     }
             } catch (e: Exception) {
