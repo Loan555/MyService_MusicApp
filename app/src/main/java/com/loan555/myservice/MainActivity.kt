@@ -11,17 +11,20 @@ import android.os.Bundle
 import android.os.IBinder
 import android.util.Log
 import android.view.Menu
+import android.view.MenuItem
 import android.view.View
 import android.widget.Toast
 import androidx.fragment.app.commit
 import com.loan555.myservice.broadcast.MyBroadcastReceiver
 import com.loan555.myservice.fragment.ListSongFragment
 import com.loan555.myservice.fragment.PlayFragment
+import com.loan555.myservice.model.AppPreferences
 import com.loan555.myservice.model.Audio
 import com.loan555.myservice.model.AudioList
 import com.loan555.myservice.model.AudioTest
 import com.loan555.myservice.permission.MyPermission
 import com.loan555.myservice.permission.STORAGE_REQUEST_CODE
+import com.loan555.myservice.service.ACTION_HISTORY
 import com.loan555.myservice.service.ACTION_PAUSE
 import com.loan555.myservice.service.MyServiceClass
 import com.loan555.myservice.service.tagTest
@@ -39,6 +42,9 @@ var currentFragment: String = ""
 
 class MainActivity : AppCompatActivity(),
     ListSongFragment.ClickSongListener {
+
+    val se = AppPreferences
+    var lastSongPlayID: Long = -1
     private var audioList = AudioList(this)
     private val permissions = MyPermission(this, this)
 
@@ -55,7 +61,6 @@ class MainActivity : AppCompatActivity(),
             Log.e(tagTest, "connect bound service $mBound")
             //read data here
             loadData(mService.audioList)
-            audioList = mService.audioList
         }
 
         override fun onServiceDisconnected(name: ComponentName?) {
@@ -65,8 +70,11 @@ class MainActivity : AppCompatActivity(),
 
     override fun onStart() {
         super.onStart()
-        Intent(this, MyServiceClass::class.java).also {
-            bindService(it, conn, Context.BIND_AUTO_CREATE)
+        Log.d(tagTest, "onStart activity")
+        if (permissions.checkStoragePermission()) {
+            Intent(this, MyServiceClass::class.java).also {
+                bindService(it, conn, Context.BIND_AUTO_CREATE)
+            }
         }
     }
 
@@ -74,7 +82,16 @@ class MainActivity : AppCompatActivity(),
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
+        Log.d(tagTest, "onCreate activity")
+
         setSupportActionBar(toolbar_main)
+        try {
+            se.init(this)
+            lastSongPlayID = se.lastSongIDPlay
+            Log.d(tagTest, "lay lich su: $lastSongPlayID")
+        } catch (e: Exception) {
+
+        }
 
         supportFragmentManager.commit {
             val mSongsFragment = ListSongFragment(audioList, this@MainActivity)
@@ -191,12 +208,14 @@ class MainActivity : AppCompatActivity(),
         grantResults: IntArray
     ) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        Log.d(tagTest, "onRequestPermissionsResult")
         when (requestCode) {
             STORAGE_REQUEST_CODE -> {
                 if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
                     //permission granted
                     Toast.makeText(this, "Allow...", Toast.LENGTH_SHORT)
                         .show()
+                    loadData(audioList)
                 } else {
                     //permission denied
                     Toast.makeText(this, "Storage permission required...", Toast.LENGTH_SHORT)
@@ -223,6 +242,39 @@ class MainActivity : AppCompatActivity(),
                     Toast.makeText(this@MainActivity, "Load data done", Toast.LENGTH_SHORT)
                         .show()
                     list.adapter?.notifyDataSetChanged()
+
+                    // lay lich su
+                    try {
+                        if (lastSongPlayID.toInt() != -1) {//bang -1 thi ko co cai gi
+                            Log.d(tagTest, "last = ${lastSongPlayID.toInt()}")
+                            val position = listData.getPositionByID(lastSongPlayID)
+                            if (position != -1) {
+                                val audio = listData.getItem(position)
+                                Log.e(tagTest, "history song $position = $audio")
+                                mService.myItemView = music_playing
+                                mService.songPlaying = audio
+                                val intent =
+                                    Intent(this@MainActivity, MyBroadcastReceiver::class.java)
+                                val bundle = Bundle()
+                                val audioTest = AudioTest(
+                                    audio.id,
+                                    audio.name,
+                                    audio.artists,
+                                    audio.duration,
+                                    audio.size,
+                                    audio.title,
+                                    audio.albums
+                                )
+                                bundle.putSerializable("song", audioTest)
+                                intent.putExtra("bundle_song", bundle)
+                                intent.putExtra("action_music", ACTION_HISTORY)
+                                sendBroadcast(intent)
+                                mService.initViewPlay(audio)
+                            }
+                        }
+                    } catch (e: Exception) {
+                        Log.e(tagTest, "error get history: ${e.message}")
+                    }
                 } else {
                     Toast.makeText(this@MainActivity, "Load data error..", Toast.LENGTH_SHORT)
                         .show()
@@ -230,6 +282,23 @@ class MainActivity : AppCompatActivity(),
             }
         } else {
             permissions.requestStoragePermission()
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        Log.d(tagTest, "onResume activity")
+        if (!mBound && permissions.checkStoragePermission()) {
+            Intent(this, MyServiceClass::class.java).also {
+                bindService(it, conn, Context.BIND_AUTO_CREATE)
+            }
+        }
+    }
+
+    override fun onOptionsItemSelected(item: MenuItem): Boolean {
+        return super.onOptionsItemSelected(item)
+        if (item.itemId == R.id.settingData) {
+            loadData(mService.audioList)
         }
     }
 

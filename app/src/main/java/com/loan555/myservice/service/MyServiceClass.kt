@@ -23,6 +23,7 @@ import androidx.core.content.ContextCompat
 import com.loan555.myservice.*
 import com.loan555.myservice.adapter.TAG
 import com.loan555.myservice.broadcast.MyBroadcastReceiver
+import com.loan555.myservice.model.AppPreferences
 import com.loan555.myservice.model.Audio
 import com.loan555.myservice.model.AudioList
 import com.loan555.myservice.model.AudioTest
@@ -39,7 +40,7 @@ const val ACTION_PAUSE = 1
 private const val ACTION_STOP = 3
 private const val ACTION_NEXT = 2
 private const val ACTION_BACK = -2
-
+const val ACTION_HISTORY = 4
 class MyServiceClass : Service() {
 
     var alarmTime = 0
@@ -96,8 +97,11 @@ class MyServiceClass : Service() {
                 val name = audio.title
                 val singer = audio.artists
                 val thumbnail = audio.bitmap
-                if (action == 0)
-                    startMusic(audio)
+                when(action){
+                    0->startMusic(audio)
+                    4->songHistory(audio)
+                }
+
 
                 val pendingIntent =
                     PendingIntent.getActivity(this, 0, intent, flags)
@@ -137,6 +141,8 @@ class MyServiceClass : Service() {
                     .setContentIntent(pendingIntent)
                     .build()
                 startForeground(ONGOING_NOTIFICATION_ID, notification)
+                AppPreferences.init(this)
+                AppPreferences.lastSongIDPlay = audio.id
             } else {
                 Log.d(tagTest, "bundel null ")
             }
@@ -144,6 +150,33 @@ class MyServiceClass : Service() {
             Log.e(tagTest, "sent notification error: ${e.message}")
         }
         return START_NOT_STICKY
+    }
+
+    private fun songHistory(audio: Audio) {
+        try {
+            mPlayer = if (mPlayer == null) {
+                MediaPlayer.create(this, audio.uri)
+            } else {
+                mPlayer.release()
+                MediaPlayer.create(this, audio.uri)
+            }
+            mPlayer.start()
+            if (!isPlaying)
+                mPlayer.pause()
+            mPlayer.setOnCompletionListener {
+                Log.e(tagTest, "chayj het bai roi")
+                nextAuto(audio, statePlay, myItemView)
+            }
+            mPlayer.setOnErrorListener { _, _, _ ->
+                nextAuto(audio, statePlay, myItemView)
+                true
+            }
+            mPlayer.setOnSeekCompleteListener {
+                Log.e(tagTest, "di chuyen seekbar xong")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "play music error: ${e.message}")
+        }
     }
 
     private fun getImgBtn(): Int {
@@ -234,8 +267,11 @@ class MyServiceClass : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
-        Log.d(TAG, "service on destroy")
+        Log.d(tagTest, "service on destroy")
         mPlayer.release()
+        AppPreferences.init(this)
+        AppPreferences.lastSongIDPlay = songPlaying.id
+        Log.d(tagTest, "save : ${AppPreferences.lastSongIDPlay}")
     }
 
     private fun startMusic(audio: Audio) {

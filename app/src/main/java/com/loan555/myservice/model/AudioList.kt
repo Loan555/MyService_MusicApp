@@ -16,6 +16,7 @@ import com.loan555.myservice.LOGO
 import com.loan555.myservice.MainActivity
 import com.loan555.myservice.R
 import com.loan555.myservice.adapter.TAG
+import com.loan555.myservice.service.tagTest
 import java.io.Serializable
 import java.text.FieldPosition
 
@@ -54,7 +55,7 @@ class AudioList(private val context: Context) {
         audioList.forEach {
             listToString += it.toString() + "\n"
         }
-        Log.d("audioList", "Audio list ${audioList.size} = $listToString")
+        Log.d(tagTest, "Audio list ${audioList.size} = $listToString")
     }
 
     fun getList() {
